@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.venv/
+venv/
+
+data/longbench/processed/*.jsonl
+data/longbench/processed/manifest.json
+outputs/
