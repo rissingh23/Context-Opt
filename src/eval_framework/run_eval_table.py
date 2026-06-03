@@ -113,6 +113,7 @@ def run_one_row(example: dict[str, Any], strategy_name: str, args: argparse.Name
             top_k=args.top_k,
             chunk_chars=args.chunk_chars,
             overlap_chars=args.overlap_chars,
+            summarization_model=args.summarization_model,
         )
 
         # Step 1: strategy transforms full context into the prompt payload.
@@ -253,6 +254,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--chunk-chars", type=int, default=2000)
     parser.add_argument("--overlap-chars", type=int, default=200)
+    parser.add_argument("--summarization-model", default=None, help="Override the summarization strategy model.")
     parser.add_argument("--lambda-cost", type=float, default=1.0)
     parser.add_argument("--beta-latency", type=float, default=0.0)
     parser.add_argument("--rows-output", type=Path, default=Path("outputs/processed/eval_rows.csv"))

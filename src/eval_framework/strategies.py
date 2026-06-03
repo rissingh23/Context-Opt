@@ -22,5 +22,6 @@ def build_strategy(name: str, **kwargs: Any):
     if name == "compression":
         return CompressionStrategy()
     if name == "summarization":
-        return SummarizationStrategy()
+        model_name = kwargs.get("summarization_model")
+        return SummarizationStrategy(**({} if model_name is None else {"model_name": model_name}))
     raise ValueError(f"Unknown strategy '{name}'")
