@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gc
 import json
 import time
 from pathlib import Path
 from typing import Any
 
+import torch
 from tqdm.auto import tqdm
 
 from src.data.load_examples import load_examples
@@ -274,6 +276,9 @@ def main() -> None:
     for example in tqdm(examples, desc="Examples"):
         for strategy_name in tqdm(args.strategies, desc="Strategies", leave=False):
             rows.append(run_one_row(example, strategy_name, args, model_runner, judge))
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     write_csv(args.rows_output, rows, ROW_FIELDS)
     aggregate = aggregate_rows(rows)
