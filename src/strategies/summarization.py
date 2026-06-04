@@ -38,7 +38,7 @@ class SummarizationStrategy:
             print(f"[SummarizationStrategy] Loaded {model_name} in float16")
         self.model.eval()
 
-    def _summarize(self, context: str, query: str, max_summary_tokens: int = 200) -> str:
+    def _summarize(self, context: str, query: str, max_summary_tokens: int = 500) -> str:
         prompt = (
             "Given the following question, summarize the text below keeping all information "
             "relevant to answering it:\n\n"
