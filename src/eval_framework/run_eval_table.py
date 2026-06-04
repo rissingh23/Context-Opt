@@ -122,6 +122,10 @@ def run_one_row(example: dict[str, Any], strategy_name: str, args: argparse.Name
         strategy_start = time.perf_counter()
         strategy_result = strategy.prepare(example)
         strategy_latency = time.perf_counter() - strategy_start
+        del strategy
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # Step 2: model answers from the strategy-produced prompt.
         model_result = model_runner.generate(strategy_result.prompt, example)
