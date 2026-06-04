@@ -277,12 +277,12 @@ def main() -> None:
 
     rows: list[dict[str, Any]] = []
     total = len(examples) * len(args.strategies)
-    for example in tqdm(examples, desc="Examples"):
-        for strategy_name in tqdm(args.strategies, desc="Strategies", leave=False):
+    for strategy_name in tqdm(args.strategies, desc="Strategies"):
+        for example in tqdm(examples, desc="Examples", leave=False):
             rows.append(run_one_row(example, strategy_name, args, model_runner, judge))
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     write_csv(args.rows_output, rows, ROW_FIELDS)
     aggregate = aggregate_rows(rows)
