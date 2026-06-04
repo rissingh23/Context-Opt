@@ -33,11 +33,11 @@ class SummarizationStrategy:
         )
         self.model.eval()
 
-    def _summarize(self, context: str, max_summary_tokens: int = 500) -> str:
+    def _summarize(self, context: str, query: str, max_summary_tokens: int = 500) -> str:
         prompt = (
-            "Summarize the following text concisely, "
-            "keeping the most important information:\n\n"
-            f"Text: {context}\n\nSummary:"
+            "Given the following question, summarize the text below keeping all information "
+            "relevant to answering it:\n\n"
+            f"Question: {query}\n\nText: {context}\n\nSummary:"
         )
         inputs = self.tokenizer(
             prompt,
@@ -62,7 +62,7 @@ class SummarizationStrategy:
     def prepare(self, example: dict[str, Any]) -> StrategyResult:
         query = example["query"]
         context = example["context"]
-        summary = self._summarize(context)
+        summary = self._summarize(context, query)
 
         prompt = f"Context: {summary}\n\nQuestion: {query}\n\nAnswer:"
 
