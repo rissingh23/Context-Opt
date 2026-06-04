@@ -20,17 +20,22 @@ class SummarizationStrategy:
     name = "summarization"
 
     def __init__(self, model_name: str = "meta-llama/Llama-3.1-8B-Instruct"):
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            quantization_config=bnb_config,
-            device_map="auto",
-        )
+        kwargs: dict = {"device_map": "auto"}
+        try:
+            import bitsandbytes  # noqa: F401
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+            )
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+            print(f"[SummarizationStrategy] Loaded {model_name} with 4-bit quantization")
+        except Exception as e:
+            print(f"[SummarizationStrategy] 4-bit failed ({e}), falling back to float16")
+            kwargs["torch_dtype"] = torch.float16
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+            print(f"[SummarizationStrategy] Loaded {model_name} in float16")
         self.model.eval()
 
     def _summarize(self, context: str, query: str, max_summary_tokens: int = 500) -> str:
@@ -44,7 +49,7 @@ class SummarizationStrategy:
             return_tensors="pt",
             truncation=True,
             max_length=4096,
-        ).to("cuda")
+        ).to(self.model.device)
 
         with torch.no_grad():
             outputs = self.model.generate(  # type: ignore[attr-defined]
