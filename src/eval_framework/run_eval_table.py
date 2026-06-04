@@ -94,7 +94,7 @@ def utility_score(quality: float, estimated_cost: float, latency_sec: float, lam
     return quality - lambda_cost * estimated_cost - beta_latency * latency_sec
 
 
-def run_one_row(example: dict[str, Any], strategy_name: str, args: argparse.Namespace, model_runner, judge) -> dict[str, Any]:
+def run_one_row(example: dict[str, Any], strategy, args: argparse.Namespace, model_runner, judge) -> dict[str, Any]:
     task = example["task"]
     task_type = get_task_type(task)
     original_context_tokens = count_tokens_rough(example["context"])
@@ -103,29 +103,17 @@ def run_one_row(example: dict[str, Any], strategy_name: str, args: argparse.Name
         "task": task,
         "example_id": example["example_id"],
         "task_type": task_type,
-        "strategy": strategy_name,
+        "strategy": strategy.name,
         "model": args.model,
         "query": example["query"],
         "reference_answer": example["reference_answer"],
     }
 
     try:
-        strategy = build_strategy(
-            strategy_name,
-            top_k=args.top_k,
-            chunk_chars=args.chunk_chars,
-            overlap_chars=args.overlap_chars,
-            summarization_model=args.summarization_model,
-        )
-
         # Step 1: strategy transforms full context into the prompt payload.
         strategy_start = time.perf_counter()
         strategy_result = strategy.prepare(example)
         strategy_latency = time.perf_counter() - strategy_start
-        del strategy
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
         # Step 2: model answers from the strategy-produced prompt.
         model_result = model_runner.generate(strategy_result.prompt, example)
@@ -278,8 +266,16 @@ def main() -> None:
     rows: list[dict[str, Any]] = []
     total = len(examples) * len(args.strategies)
     for strategy_name in tqdm(args.strategies, desc="Strategies"):
+        strategy = build_strategy(
+            strategy_name,
+            top_k=args.top_k,
+            chunk_chars=args.chunk_chars,
+            overlap_chars=args.overlap_chars,
+            summarization_model=args.summarization_model,
+        )
         for example in tqdm(examples, desc="Examples", leave=False):
-            rows.append(run_one_row(example, strategy_name, args, model_runner, judge))
+            rows.append(run_one_row(example, strategy, args, model_runner, judge))
+        del strategy
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
