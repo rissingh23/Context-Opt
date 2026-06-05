@@ -241,9 +241,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tasks", nargs="+", default=DEFAULT_TASKS)
     parser.add_argument("--strategies", nargs="+", default=DEFAULT_STRATEGIES)
     parser.add_argument("--limit", type=int, default=5)
+    parser.add_argument("--offset", type=int, default=0, help="Skip first N examples per task (for splitting work across runs).")
     parser.add_argument("--provider", default="mock")
     parser.add_argument("--model", default="mock_model")
-    parser.add_argument("--judge", default="disabled")
+    parser.add_argument("--judge", default="disabled", help="Judge provider: disabled or vertexai.")
+    parser.add_argument("--judge-model", default="gemini-2.5-flash", help="Model to use for LLM judge.")
     parser.add_argument("--quality-source", choices=["automatic", "llm_judge"], default="automatic")
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--chunk-chars", type=int, default=2000)
@@ -274,14 +276,19 @@ def load_checkpoint(path: Path) -> tuple[list[dict[str, Any]], set[tuple[str, st
 
 def main() -> None:
     args = parse_args()
-    examples = load_examples(tasks=args.tasks, limit=args.limit)
+    examples = load_examples(tasks=args.tasks, limit=args.limit, offset=args.offset)
     model_runner = build_model_runner(
         args.provider,
         args.model,
         project=args.vertexai_project,
         location=args.vertexai_location,
     )
-    judge = build_judge(args.judge)
+    judge = build_judge(
+        args.judge,
+        judge_model=args.judge_model,
+        project=args.vertexai_project,
+        location=args.vertexai_location,
+    )
 
     # Load existing results so we can skip already-processed rows on restart.
     args.json_output.parent.mkdir(parents=True, exist_ok=True)

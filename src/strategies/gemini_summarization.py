@@ -22,8 +22,9 @@ class GeminiSummarizationStrategy:
 
     def _summarize(self, context: str, query: str) -> str:
         prompt = (
-            "Given the following question, summarize the text below keeping all information "
-            "relevant to answering it. Be concise but preserve key facts.\n\n"
+            "Given the following question, summarize the text below in detail. "
+            "Preserve all facts, figures, names, and specific information that could help answer it. "
+            "Do not leave out relevant details.\n\n"
             f"Question: {query}\n\nText: {context}\n\nSummary:"
         )
         response = self.client.models.generate_content(model=self.model_name, contents=prompt)

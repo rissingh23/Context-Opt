@@ -16,6 +16,7 @@ def iter_examples(
     tasks: list[str] | None = None,
     data_dir: Path = DEFAULT_DATA_DIR,
     limit: int | None = None,
+    offset: int = 0,
 ) -> Iterator[dict[str, Any]]:
     paths = [data_dir / f"{task}.jsonl" for task in tasks] if tasks else sorted(data_dir.glob("*.jsonl"))
     emitted = 0
@@ -25,9 +26,13 @@ def iter_examples(
             continue
         if not path.exists():
             raise FileNotFoundError(f"Missing normalized dataset file: {path}")
+        skipped = 0
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
+                    continue
+                if skipped < offset:
+                    skipped += 1
                     continue
                 yield json.loads(line)
                 emitted += 1
@@ -39,8 +44,9 @@ def load_examples(
     tasks: list[str] | None = None,
     data_dir: Path = DEFAULT_DATA_DIR,
     limit: int | None = None,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
-    return list(iter_examples(tasks=tasks, data_dir=data_dir, limit=limit))
+    return list(iter_examples(tasks=tasks, data_dir=data_dir, limit=limit, offset=offset))
 
 
 def parse_args() -> argparse.Namespace:
