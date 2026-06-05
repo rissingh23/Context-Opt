@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass
 
 
@@ -34,31 +35,39 @@ class VertexAIJudge:
 
     def score(self, *, task_type: str, query: str, reference_answer: str, prediction: str) -> JudgeResult:
         prompt = (
-            "You are evaluating an AI system's answer against a reference answer.\n\n"
+            "You are evaluating an AI system's answer against a reference answer. "
+            "Score the answer on a continuous scale from 0.0 to 1.0 — do not round to 0, 0.5, or 1.\n\n"
             f"Task type: {task_type}\n"
             f"Question: {query}\n"
             f"Reference answer: {reference_answer}\n"
             f"AI answer: {prediction}\n\n"
-            "Score the AI answer from 0.0 to 1.0:\n"
-            "- 1.0: completely correct and complete\n"
-            "- 0.5: partially correct or missing details\n"
-            "- 0.0: incorrect or irrelevant\n\n"
-            'Respond with only a JSON object: {"score": <float 0-1>, "reason": "<one sentence>"}'
+            "Scoring rubric:\n"
+            "0.9-1.0: all key facts correct and complete\n"
+            "0.7-0.9: mostly correct, minor omissions or imprecision\n"
+            "0.5-0.7: partially correct, some relevant content but missing important details\n"
+            "0.3-0.5: some relevant content but significant errors or omissions\n"
+            "0.1-0.3: mostly incorrect, only superficial relevance\n"
+            "0.0-0.1: completely wrong or irrelevant\n\n"
+            'Respond with only a JSON object: {"score": <float>, "reason": "<one sentence>"}'
         )
-        try:
-            response = self.client.models.generate_content(model=self.judge_model, contents=prompt)
-            text = (response.text or "").strip()
-            match = re.search(r"\{.*\}", text, re.DOTALL)
-            if match:
-                data = json.loads(match.group(0))
-                return JudgeResult(
-                    score=float(data["score"]),
-                    reason=str(data.get("reason", "")),
-                    judge_model=self.judge_model,
-                )
-            return JudgeResult(score=None, reason=f"Parse error: {text}", judge_model=self.judge_model)
-        except Exception as exc:
-            return JudgeResult(score=None, reason=f"Judge error: {exc}", judge_model=self.judge_model)
+        for attempt in range(3):
+            try:
+                response = self.client.models.generate_content(model=self.judge_model, contents=prompt)
+                text = (response.text or "").strip()
+                match = re.search(r"\{.*\}", text, re.DOTALL)
+                if match:
+                    data = json.loads(match.group(0))
+                    return JudgeResult(
+                        score=float(data["score"]),
+                        reason=str(data.get("reason", "")),
+                        judge_model=self.judge_model,
+                    )
+                return JudgeResult(score=None, reason=f"Parse error: {text}", judge_model=self.judge_model)
+            except Exception as exc:
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                else:
+                    return JudgeResult(score=None, reason=f"Judge error after retries: {exc}", judge_model=self.judge_model)
 
 
 def build_judge(name: str, **kwargs) -> DisabledJudge | VertexAIJudge:
