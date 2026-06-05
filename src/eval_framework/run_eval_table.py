@@ -259,6 +259,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def load_checkpoint(path: Path) -> tuple[list[dict[str, Any]], set[tuple[str, str, str]]]:
+    if not path.exists():
+        return [], set()
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                rows.append(json.loads(line))
+    done = {(r["task"], r["example_id"], r["strategy"]) for r in rows}
+    print(f"Resuming from checkpoint: {len(rows)} rows already done.")
+    return rows, done
+
+
 def main() -> None:
     args = parse_args()
     examples = load_examples(tasks=args.tasks, limit=args.limit)
@@ -270,37 +283,47 @@ def main() -> None:
     )
     judge = build_judge(args.judge)
 
-    rows: list[dict[str, Any]] = []
-    total = len(examples) * len(args.strategies)
-    for strategy_name in tqdm(args.strategies, desc="Strategies"):
-        strategy = build_strategy(
-            strategy_name,
-            top_k=args.top_k,
-            chunk_chars=args.chunk_chars,
-            overlap_chars=args.overlap_chars,
-            summarization_model=args.summarization_model,
-            vertexai_project=args.vertexai_project,
-            vertexai_location=args.vertexai_location,
-        )
-        for example in tqdm(examples, desc="Examples", leave=False):
-            rows.append(run_one_row(example, strategy, args, model_runner, judge))
-        del strategy
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+    # Load existing results so we can skip already-processed rows on restart.
+    args.json_output.parent.mkdir(parents=True, exist_ok=True)
+    rows, done = load_checkpoint(args.json_output)
+
+    json_handle = args.json_output.open("a", encoding="utf-8")
+
+    try:
+        for strategy_name in tqdm(args.strategies, desc="Strategies"):
+            strategy = build_strategy(
+                strategy_name,
+                top_k=args.top_k,
+                chunk_chars=args.chunk_chars,
+                overlap_chars=args.overlap_chars,
+                summarization_model=args.summarization_model,
+                vertexai_project=args.vertexai_project,
+                vertexai_location=args.vertexai_location,
+            )
+            for example in tqdm(examples, desc="Examples", leave=False):
+                key = (example["task"], example["example_id"], strategy_name)
+                if key in done:
+                    continue
+                row = run_one_row(example, strategy, args, model_runner, judge)
+                rows.append(row)
+                done.add(key)
+                json_handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+                json_handle.flush()
+            del strategy
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+    finally:
+        json_handle.close()
 
     write_csv(args.rows_output, rows, ROW_FIELDS)
     aggregate = aggregate_rows(rows)
     write_csv(args.aggregate_output, aggregate, AGG_FIELDS)
 
-    args.json_output.parent.mkdir(parents=True, exist_ok=True)
-    with args.json_output.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-
+    total = len(examples) * len(args.strategies)
     print(f"Wrote {len(rows)}/{total} rows to {args.rows_output}")
     print(f"Wrote {len(aggregate)} aggregate rows to {args.aggregate_output}")
-    print(f"Wrote JSONL rows to {args.json_output}")
+    print(f"Checkpoint at {args.json_output}")
 
 
 if __name__ == "__main__":
