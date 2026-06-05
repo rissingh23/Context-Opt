@@ -32,6 +32,7 @@ ROW_FIELDS = [
     "strategy",
     "model",
     "query",
+    "context",
     "prediction",
     "reference_answer",
     "quality_source",
@@ -136,6 +137,7 @@ def run_one_row(example: dict[str, Any], strategy, args: argparse.Namespace, mod
 
         return {
             **base_row,
+            "context": strategy_result.context,
             "prediction": model_result.prediction,
             "quality_source": args.quality_source,
             "quality_score": quality,
@@ -158,6 +160,7 @@ def run_one_row(example: dict[str, Any], strategy, args: argparse.Namespace, mod
     except Exception as exc:
         return {
             **base_row,
+            "context": "",
             "prediction": "",
             "quality_source": args.quality_source,
             "quality_score": 0.0,
