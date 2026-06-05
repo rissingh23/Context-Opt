@@ -1,8 +1,6 @@
 """Model runner abstraction for eval.
 
-The framework needs a model-like component that turns a prompt into a prediction.
-For now, `mock` makes the table runnable without API keys; real providers can be
-added here without changing the eval loop.
+Supported providers: mock, vertexai.
 """
 
 from __future__ import annotations
@@ -33,9 +31,6 @@ class MockModelRunner:
 
     def generate(self, prompt: str, example: dict) -> ModelResult:
         start = time.perf_counter()
-
-        # This is intentionally not a real model. It lets us validate the eval
-        # framework shape before plugging in Llama, Qwen, or API providers.
         prediction = example.get("reference_answer", "")
         input_tokens = count_tokens_rough(prompt)
         output_tokens = count_tokens_rough(prediction)
@@ -51,7 +46,48 @@ class MockModelRunner:
         )
 
 
-def build_model_runner(provider: str, model_name: str) -> MockModelRunner:
+class VertexAIModelRunner:
+    """Answer model backed by Gemini via Vertex AI."""
+
+    # Gemini 2.5 Flash pricing per token
+    _COST_PER_INPUT_TOKEN = 0.075 / 1_000_000
+    _COST_PER_OUTPUT_TOKEN = 0.30 / 1_000_000
+
+    def __init__(self, model_name: str = "gemini-2.5-flash", project: str = "", location: str = "us-central1") -> None:
+        from google import genai
+        self.model_name = model_name
+        self.client = genai.Client(vertexai=True, project=project, location=location)
+
+    def generate(self, prompt: str, example: dict) -> ModelResult:
+        start = time.perf_counter()
+        response = self.client.models.generate_content(model=self.model_name, contents=prompt)
+        latency = time.perf_counter() - start
+
+        prediction = response.text or ""
+        input_tokens = count_tokens_rough(prompt)
+        output_tokens = count_tokens_rough(prediction)
+        estimated_cost = (
+            input_tokens * self._COST_PER_INPUT_TOKEN
+            + output_tokens * self._COST_PER_OUTPUT_TOKEN
+        )
+
+        return ModelResult(
+            prediction=prediction,
+            model=self.model_name,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            model_latency_sec=latency,
+            estimated_cost=estimated_cost,
+        )
+
+
+def build_model_runner(provider: str, model_name: str, **kwargs) -> MockModelRunner | VertexAIModelRunner:
     if provider == "mock":
         return MockModelRunner(model_name=model_name)
-    raise ValueError(f"Unknown provider '{provider}'. Supported: mock")
+    if provider == "vertexai":
+        return VertexAIModelRunner(
+            model_name=model_name,
+            project=kwargs.get("project", ""),
+            location=kwargs.get("location", "us-central1"),
+        )
+    raise ValueError(f"Unknown provider '{provider}'. Supported: mock, vertexai")

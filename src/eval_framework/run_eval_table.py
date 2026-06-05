@@ -249,6 +249,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-chars", type=int, default=2000)
     parser.add_argument("--overlap-chars", type=int, default=200)
     parser.add_argument("--summarization-model", default=None, help="Override the summarization strategy model.")
+    parser.add_argument("--vertexai-project", default="", help="GCP project ID for Vertex AI.")
+    parser.add_argument("--vertexai-location", default="us-central1", help="GCP location for Vertex AI.")
     parser.add_argument("--lambda-cost", type=float, default=1.0)
     parser.add_argument("--beta-latency", type=float, default=0.0)
     parser.add_argument("--rows-output", type=Path, default=Path("outputs/processed/eval_rows.csv"))
@@ -260,7 +262,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     examples = load_examples(tasks=args.tasks, limit=args.limit)
-    model_runner = build_model_runner(args.provider, args.model)
+    model_runner = build_model_runner(
+        args.provider,
+        args.model,
+        project=args.vertexai_project,
+        location=args.vertexai_location,
+    )
     judge = build_judge(args.judge)
 
     rows: list[dict[str, Any]] = []
@@ -272,6 +279,8 @@ def main() -> None:
             chunk_chars=args.chunk_chars,
             overlap_chars=args.overlap_chars,
             summarization_model=args.summarization_model,
+            vertexai_project=args.vertexai_project,
+            vertexai_location=args.vertexai_location,
         )
         for example in tqdm(examples, desc="Examples", leave=False):
             rows.append(run_one_row(example, strategy, args, model_runner, judge))
